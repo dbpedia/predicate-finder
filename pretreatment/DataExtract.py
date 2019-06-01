@@ -3,7 +3,9 @@
 from SPARQLWrapper import SPARQLWrapper, JSON
 import spotlight as sl
 
-def GetPredicateList(entity):
+def GetPredicateList(entity, template_id):
+
+
 
     query_template = """
         PREFIX dbr:  <http://dbpedia.org/resource/>
