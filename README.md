@@ -1,1 +1,9 @@
 # predicate-finder
+
+Up to now following datasets are needed: 
+
+* Lc-Quad train_data & test_data\
+[Download](https://github.com/AskNowQA/LC-QuAD)
+
+* pre-trained embedding using FastText & GloVe\
+These datasets would be stored in five files in total, which will be downloaded in the first run. There is no need to download it manually.
