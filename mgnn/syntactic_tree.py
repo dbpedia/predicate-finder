@@ -1,5 +1,5 @@
 from stanfordcorenlp import StanfordCoreNLP
-model_path = ''
+model_path = '/home/wangdong/stanford-corenlp-full-2018-02-27'
 nlp=StanfordCoreNLP(model_path, lang='en')
 
 
@@ -11,7 +11,6 @@ def parse_sentence(sen):
     instance["stanford_head"] = [item[1] for item in dependency_parse]
     instance["stanford_deprel"] = [item[0] for item in dependency_parse]
 
-    assert len(instance["src_token"]) == len(instance["stanford_pos"])
     assert len(instance["src_token"]) == len(instance["stanford_head"])
     assert len(instance["src_token"]) == len(instance["stanford_deprel"])
 

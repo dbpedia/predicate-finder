@@ -10,7 +10,6 @@ class CNN(nn.Module):
         self.filter_sizes = args['filter_sizes']
         self.filter_num = args['filter_num']
         self.embedding_size = args['embedding_size']
-        self.cato_num = args['cato_num']
         
         self.convs = nn.ModuleList([nn.Conv2d(1, self.filter_num, (filter_size, self.embedding_size)) for filter_size in self.filter_sizes])
         
