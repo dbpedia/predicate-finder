@@ -10,9 +10,9 @@ These datasets would be stored in five files in total, which will be downloaded 
 ## How to Run
 
 Please train the model using
-'python train.py'
+`python train.py`
 And enter a query using
-'python test.py'
+`python test.py`
 
 ## Unfinished Work
 
