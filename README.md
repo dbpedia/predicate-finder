@@ -1,5 +1,21 @@
 # predicate-finder
 
-three datasets are needed: \
-Embedding.py: pre-trained word embedding of FastText and GloVe, which will be downloaded when first run\
-paths.py : lc-quad train data. This file will maintain all useful datasets except pre-trained embeddings
+## Datasets
+* Lc-Quad train_data & test_data\
+[Download](https://github.com/AskNowQA/LC-QuAD)
+
+* pre-trained embedding using FastText & GloVe\
+These datasets would be stored in five files in total, which will be downloaded in the first run. There is no need to download it manually.
+
+## How to Run
+
+Please train the model using
+`python train.py`
+And enter a query using
+`python test.py`
+
+## Unfinished Work
+
+* The hierarchical structure of predicate
+* Answer Type Embedding
+* The SPARQL querying don't work sometimes

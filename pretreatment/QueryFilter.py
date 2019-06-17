@@ -11,26 +11,18 @@ def GetSimpleQuery():
     with open(lcquad_train, "r") as f:
         train_data = json.load(f)
 
-    simple_queries = []
+    simple_temp_one = [1, 2, 101]
+    simple_temp_two = [151, 152]
 
-    for item in train_data:
-        sparql_q = item['sparql_query']
-        flag = False
+    simple_queries_one = [item['_id'] for item in train_data if item['sparql_template_id'] in simple_temp_one]
+    simple_queries_two = [item['_id'] for item in train_data if item['sparql_template_id'] in simple_temp_two]
 
-        if (sparql_q.count('<') < 3):
-            flag = True
-        elif sparql_q.count('<') == 3 and sparql_q.split(' ')[0] == 'ASK':
-            flag = True
 
-        if flag == True:
-            simple_queries.append((item['_id'], item['corrected_question']))
-            print(item['corrected_question'])
-
-    # print(len(simple_queries), len(train_data))
-
-    return simple_queries
+    return simple_queries_one, simple_queries_two
 
 
 if __name__ == '__main__':
 
-    GetSimpleQuery()
+    a, b = GetSimpleQuery()
+    print(a, '\n', b)
+    print(len(a), len(b))
