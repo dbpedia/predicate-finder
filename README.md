@@ -16,6 +16,5 @@ And enter a query using
 
 ## Unfinished Work
 
-* The hierarchical structure of predicate
 * Answer Type Embedding
-* The SPARQL querying don't work sometimes
+
