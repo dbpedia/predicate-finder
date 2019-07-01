@@ -15,6 +15,14 @@ from nltk.tokenize import word_tokenize
 from pretreatment.DataExtract import GetHierLabel, get_qword, EntityLinking, GetPredicateList
 
 
+'''
+对于152，predicate是中间那个，entity是第一个，作为subject
+对于151，同152
+对于101，predicate是中间那个，entity是最后那个，作为object
+对于1，同101
+对于2，predicate是唯一的那一个，entity是sparql_query中的第一个，作为subject
+'''
+
 ent = re.compile(u'<(.*?)>',re.M|re.S|re.I)
 
 def get_simple_query(file_path):
@@ -43,7 +51,7 @@ def get_simple_template(file_path):
     return res
 
 
-def get_for_2(data):
+def get_for_2(data, mode='less'):
     candidates = ent.findall(data['sparql_query'])
 
     standard_ent = candidates[0].split('/')[-1]
@@ -52,11 +60,14 @@ def get_for_2(data):
     predicate_uri = candidates[1]
     predicate = predicate_uri.split('/')[-1]
 
+    if mode == 'more':
+        return candidates[0], standard_ent, entity, predicate_uri, predicate
+
     return standard_ent, entity, predicate_uri, predicate
 
 
 
-def get_for_1_101(data):
+def get_for_1_101(data, mode='less'):
     candidates = ent.findall(data['sparql_query'])
 
     standard_ent = candidates[1].split('/')[-1]
@@ -65,10 +76,13 @@ def get_for_1_101(data):
     predicate_uri = candidates[0]
     predicate = predicate_uri.split('/')[-1]
 
+    if mode == 'more':
+        return candidates[0], standard_ent, entity, predicate_uri, predicate
+
     return standard_ent, entity, predicate_uri, predicate
 
 
-def get_for_151_152(data):
+def get_for_151_152(data, mode='less'):
     candidates = ent.findall(data['sparql_query'])
 
     standard_ent = candidates[0].split('/')[-1]
@@ -76,6 +90,9 @@ def get_for_151_152(data):
 
     predicate_uri = candidates[1]
     predicate = predicate_uri.split('/')[-1]
+
+    if mode == 'more':
+        return candidates[0], standard_ent, entity, predicate_uri, predicate
 
     return standard_ent, entity, predicate_uri, predicate
 
@@ -213,7 +230,48 @@ def GetSimpleQueryForTest():
     with open('../data/test_data.pkl', 'wb') as f:
         pickle.dump(total_res, f)
 
+
+def get_stand_ans_for_test():
+
+    simple_queries = get_simple_query(paths.lcquad_test)
+
+    res = []
+
+    counter = 0
+
+    for item in simple_queries:
+
+        counter += 1
+        print(counter)
+
+
+        try:
+            if item["sparql_template_id"] == 2:
+                standard_ent, entity, predicate_uri, predicate = get_for_2(item)
+            elif item["sparql_template_id"] == 1 or item["sparql_template_id"] == 101:
+                standard_ent, entity, predicate_uri, predicate = get_for_1_101(item)
+            elif item["sparql_template_id"] == 151 or item["sparql_template_id"] == 152:
+                standard_ent, entity, predicate_uri, predicate = get_for_151_152(item)
+
+            res.append((item['corrected_question'], standard_ent, predicate))
+            
+            # standard_ent = re.sub("[\s+\.\!,&$%^*)(+\"\']+|[+——！，。？、~@#￥%……&*（）]+",  "", standard_ent)
+            # tmp = standard_ent.split('_')
+            # standard_ent = [a for a in tmp if a != '']
+            # entity = standard_ent[-1]; standard_ent = '_'.join(standard_ent)
+        except Exception as e:
+            print('some error in parse the question!!!')
+            print(e)
+            continue
+
+        
+    with open('../data/gold_test.csv', "w") as csvfile:
+        writer = csv.writer(csvfile, delimiter='\t')
+        writer.writerows(res)
+
+
 if __name__ == '__main__':
 
     # GetSimpleQueryForTrain()
-    GetSimpleQueryForTest()
+    # GetSimpleQueryForTest()
+    get_stand_ans_for_test()

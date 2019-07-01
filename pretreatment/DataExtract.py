@@ -105,25 +105,43 @@ def GetHierLabel(entity, predicate_uri, template_id=2):
 
 
 # 取出最有可能的entity
-def EntityLinking(text):
+def EntityLinking(text, return_type='less'):
     try:
+        print('asdfafa')
         annotation = sl.annotate('http://model.dbpedia-spotlight.org/en/annotate', \
                                 text, \
                                 confidence=0.4, support=0)
+        print(annotation)
     except Exception as e:
         print('some errors in EntityLinking')
         print(e)
         return [], []
 
-    text_ent = []; standard_ent = []
+    text_ent = []; standard_ent = []; similarities = []; standard_ent_uri = []
     for dic in annotation:
         text_ent.append(dic['surfaceForm'])
+        standard_ent_uri.append(dic['URI'])
         standard_ent.append(dic['URI'].split('/')[-1])
+        similarities.append(dic['similarityScore'])
         # ent_list.append((dic['surfaceForm'], dic['similarityScore']))
     # ent_list = sorted(ent_list, key=lambda x: x[1], reverse=True)
     # ent = ent_list[0][0]
 
-    return text_ent, standard_ent
+    if return_type == 'less':
+        return text_ent, standard_ent
+    elif return_type == 'more':
+        return text_ent, standard_ent, standard_ent_uri, similarities
+
+def Question_Predicted_Answer_Sim(query, sparql_query):
+    try:
+        sparql = SPARQLWrapper("https://dbpedia.org/sparql")
+        sparql.setQuery(sparql_query)
+        sparql.setReturnFormat(JSON)
+        result = sparql.query().convert()
+    except Exception:
+        print(sparql_query)
+
+    return result
 
 
 if __name__ == '__main__':
@@ -136,5 +154,8 @@ if __name__ == '__main__':
     # print(p_list)
 
 
-    res = GetPredicateList('Richard_Coke')
+    # res = GetPredicateList('Richard_Coke')
+    # print(res)
+
+    res = Question_Predicted_Answer_Sim('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
     print(res)
