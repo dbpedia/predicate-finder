@@ -182,50 +182,55 @@ def GetSimpleQueryForTest():
 
     total_res = []
 
+    count = 0
+
     for item in simple_queries:
+
+        count += 1; print(count)
 
         res_item = []
 
         query = item['corrected_question']
         query_id = item['_id']
 
+        print('parsing the tree...')
         parse_tree = parse_sentence(query)
 
         query_words = word_tokenize(query)
         q_word = get_qword(query_words)
 
-        text_ents, standard_ents= EntityLinking(query)
+        print('EntityLinking...')
+        text_ents, standard_ents, standard_ent_uries, confs = EntityLinking(query, 'more')
 
-        for text_ent, standard_ent in zip(text_ents, standard_ents):
+        for i in range(len(standard_ents)):
+            text_ent = text_ents[i]; standard_ent = standard_ents[i]
+            conf = confs[i]; standard_ent_uri = standard_ent_uries[i]
 
             try:
+                print('get_syntactic_seq_from_tree...')
                 syntax = get_syntactic_seq_from_tree(parse_tree, text_ent.split()[0], q_word)  # List[Str]
-                if len(syntax) < 2:
-                    syntax.append(q_word)
+                if len(syntax) < 2: syntax.append(q_word)
             except Exception as e:
-                # print('some errors in get_syntactic_seq')
-                # print(e)
+                print('some errors in get_syntactic_seq'); print(e)
                 syntax = [text_ent.split()[0], q_word]
             
+            print('GetPredicateList...')
             predicate_uris = GetPredicateList(standard_ent)
 
             for predicate_uri in predicate_uris:
 
                 predicate = predicate_uri.split('/')[-1]
-                if '#' in predicate:
-                    continue
+                if '#' in predicate: continue
+                if 'subject' in predicate or 'wiki' in predicate or 'hypernym' in predicate: continue
 
+                print('GetHierLabel...')
                 hier = GetHierLabel(standard_ent, predicate_uri)  # List[Str]
-                if not hier:  # If there is not the hier feature, we will use the predicate to be the hier feature
-                    hier = [predicate] * 2
-
-                if 'subject' in predicate or 'wiki' in predicate or 'hypernym' in predicate:
-                    continue
-
-                res_item.append(syntax, hier, [predicate])
+                if not hier: hier = [predicate] * 2
+                
+                res_item.append((syntax, hier, [predicate], conf, standard_ent_uri, predicate_uri))
 
         if res_item:
-            total_res.append((query_id, query.split(), res_item))
+            total_res.append((query_id, query, res_item))
 
     with open('../data/test_data.pkl', 'wb') as f:
         pickle.dump(total_res, f)
@@ -273,5 +278,5 @@ def get_stand_ans_for_test():
 if __name__ == '__main__':
 
     # GetSimpleQueryForTrain()
-    # GetSimpleQueryForTest()
-    get_stand_ans_for_test()
+    GetSimpleQueryForTest()
+    # get_stand_ans_for_test()
