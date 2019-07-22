@@ -7,7 +7,7 @@ from pretreatment.QueryFilter import get_simple_query, get_for_151_152, get_for_
 from pretreatment.DataExtract import EntityLinking, GetPredicateList, GetHierLabel, get_qword
 from pretreatment.syntactic_tree import get_syntactic_seq_from_tree, parse_sentence
 from utils import *
-import mgnn_m.config_train as args
+import mgnn.config_train as args
 import re
 from nltk.tokenize import word_tokenize
 

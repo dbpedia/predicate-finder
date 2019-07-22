@@ -3,7 +3,7 @@
 import json
 import sys
 sys.path.append('..')
-import mgnn_m.config_train as args
+import mgnn.config_train as args
 import paths
 
 # set "predicate_finder" as source root

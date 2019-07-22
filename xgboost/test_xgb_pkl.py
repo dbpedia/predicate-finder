@@ -3,7 +3,7 @@
 import sys
 sys.path.append('..')
 import paths
-import mgnn_m.config_train as args
+import mgnn.config_train as args
 import xgboost as xgb
 from xgboost import plot_importance
 from matplotlib import pyplot as plt
