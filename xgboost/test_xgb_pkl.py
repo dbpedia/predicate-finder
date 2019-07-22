@@ -3,6 +3,7 @@
 import sys
 sys.path.append('..')
 import paths
+import mgnn_m.config_train as args
 import xgboost as xgb
 from xgboost import plot_importance
 from matplotlib import pyplot as plt
@@ -17,17 +18,17 @@ from utils import *
 import pickle
 import json
 
-with open('../data/test_data.pkl', 'rb') as f:
+with open(args.xgb_test, 'rb') as f:
     processed_test_data = pickle.load(f)
 
-with open('../data/test-data.json', "r") as f:
+with open(args.test_data, "r") as f:
     ori_test_data = json.load(f)
 ori_dict = {}
 for tmp in ori_test_data:
     ori_dict[tmp['_id']] = {'sparql_query':tmp['sparql_query'], 'sparql_template_id':tmp['sparql_template_id']}
 
 
-my_xgb = xgb.Booster(model_file='../data/xgb.m')
+my_xgb = xgb.Booster(model_file=args.xgb_model)
 
 all_question_predicates = []
 
@@ -81,8 +82,10 @@ for item in processed_test_data:
 
     all_question_predicates.append((query, res[0][0], res[0][1], res[0][2]))
 
+    with open('../data/linshi.pkl', 'wb') as f:
+        pickle.dump(all_question_predicates, f)
 
-with open('../data/xgb_result.csv', 'w') as csvfile:
+with open(args.xgb_result, 'w') as csvfile:
     writer = csv.writer(csvfile, delimiter='\t')
     writer.writerows(all_question_predicates)
 

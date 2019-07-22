@@ -27,6 +27,17 @@ def GetPredicateList(entity, query_template='', template_id=0):
             dbr:%s ?uri ?o.
         }
     """ %entity
+    if template_id == 151 or template_id == 152 or template_id == 2:
+        pass  # 
+    elif template_id == 1 or template_id == 101:
+        query_template = """
+        PREFIX dbr:  <http://dbpedia.org/resource/>
+
+        SELECT DISTINCT ?uri WHERE {
+            ?s ?uri dbr:%s.
+        }
+        """ %entity
+
 
     # !!![Errno 54]Connection reset by peer
     try:
@@ -41,7 +52,13 @@ def GetPredicateList(entity, query_template='', template_id=0):
 
     p_list = [sub_result['uri']['value'] for sub_result in result["results"]["bindings"]]  # List[URI]
 
-    return p_list
+    # 过滤掉一些明显无用的predicate
+    res = []
+    for item in p_list:
+        if '#' in item or 'subject' in item or 'wiki' in item or 'hypernym' in item or 'gender' in item: continue
+        res.append(item)
+
+    return res
 
 
 def GetHierLabel(entity, predicate_uri, template_id=2):
@@ -107,22 +124,33 @@ def GetHierLabel(entity, predicate_uri, template_id=2):
 # 取出最有可能的entity
 def EntityLinking(text, return_type='less'):
     try:
-        print('asdfafa')
         annotation = sl.annotate('http://model.dbpedia-spotlight.org/en/annotate', \
                                 text, \
                                 confidence=0.4, support=0)
-        print(annotation)
+        print('good!')
     except Exception as e:
         print('some errors in EntityLinking')
         print(e)
-        return [], []
+        if return_type=='less':
+            return [], []
+        if return_type=='more':
+            return [], [], [], [], []
 
-    text_ent = []; standard_ent = []; similarities = []; standard_ent_uri = []
+    text_ent = []; standard_ent = []; similarities = []; standard_ent_uri = []; types = []
     for dic in annotation:
         text_ent.append(dic['surfaceForm'])
         standard_ent_uri.append(dic['URI'])
         standard_ent.append(dic['URI'].split('/')[-1])
         similarities.append(dic['similarityScore'])
+        flag = True
+        for item in dic['types'].split(','):
+            tmp = item.split(':')
+            if tmp[0] == 'DBpedia':
+                types.append(tmp[1]); flag = False
+                break
+        if flag: 
+            print(dic)
+            types.append(dic['surfaceForm'].split(' ')[-1])
         # ent_list.append((dic['surfaceForm'], dic['similarityScore']))
     # ent_list = sorted(ent_list, key=lambda x: x[1], reverse=True)
     # ent = ent_list[0][0]
@@ -130,9 +158,9 @@ def EntityLinking(text, return_type='less'):
     if return_type == 'less':
         return text_ent, standard_ent
     elif return_type == 'more':
-        return text_ent, standard_ent, standard_ent_uri, similarities
+        return text_ent, standard_ent, standard_ent_uri, similarities, types
 
-def Question_Predicted_Answer_Sim(query, sparql_query):
+def Question_Predicted_Answer_Sim_(query, sparql_query):
     try:
         sparql = SPARQLWrapper("https://dbpedia.org/sparql")
         sparql.setQuery(sparql_query)
@@ -145,7 +173,7 @@ def Question_Predicted_Answer_Sim(query, sparql_query):
 
 
 if __name__ == '__main__':
-    # text = 'Name the office of Richard Coke ?'
+    # text = 'Name the office of Barack Obama ?'
     # res = EntityLinking(text)
     # print(res)
 
@@ -154,8 +182,8 @@ if __name__ == '__main__':
     # print(p_list)
 
 
-    # res = GetPredicateList('Richard_Coke')
-    # print(res)
-
-    res = Question_Predicted_Answer_Sim('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
+    res = GetPredicateList('Gibson_Les_Paul', template_id=101)
     print(res)
+
+    # res = Question_Predicted_Answer_Sim_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
+    # print(res)

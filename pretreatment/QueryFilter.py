@@ -3,6 +3,7 @@
 import json
 import sys
 sys.path.append('..')
+import mgnn_m.config_train as args
 import paths
 
 # set "predicate_finder" as source root
@@ -16,9 +17,9 @@ from pretreatment.DataExtract import GetHierLabel, get_qword, EntityLinking, Get
 
 
 '''
-对于152，predicate是中间那个，entity是第一个，作为subject
+对于152，从sparql_query来说，predicate是中间那个，entity是第一个，作为subject
 对于151，同152
-对于101，predicate是中间那个，entity是最后那个，作为object
+对于101，从sparql_query来说，predicate是中间那个，entity是最后那个，作为object
 对于1，同101
 对于2，predicate是唯一的那一个，entity是sparql_query中的第一个，作为subject
 '''
@@ -66,7 +67,6 @@ def get_for_2(data, mode='less'):
     return standard_ent, entity, predicate_uri, predicate
 
 
-
 def get_for_1_101(data, mode='less'):
     candidates = ent.findall(data['sparql_query'])
 
@@ -97,19 +97,16 @@ def get_for_151_152(data, mode='less'):
     return standard_ent, entity, predicate_uri, predicate
 
 
-
+# 生成训练mgnn所需的数据
 def GetSimpleQueryForTrain():
 
     simple_queries = get_simple_query(paths.lcquad_train)
-
     res = []
 
     counter = 0
     for item in simple_queries:
 
-        counter += 1
-        print(counter)
-
+        counter += 1; print(counter)
 
         try:
             if item["sparql_template_id"] == 2:
@@ -123,45 +120,51 @@ def GetSimpleQueryForTrain():
             tmp = standard_ent.split('_')
             standard_ent = [a for a in tmp if a != '']
             entity = standard_ent[-1]; standard_ent = '_'.join(standard_ent)
-            
-            # if '(' in standard_ent or ')' in standard_ent:
-            #     standard_ent = standard_ent.replace('(', '').replace(')', '')
-            #     tmp = standard_ent.split('_')
-            #     standard_ent = [a for a in tmp if a != '']
-            #     entity = standard_ent[-1]; standard_ent = '_'.join(standard_ent)
         except Exception as e:
-            print('some error in parse the question!!!')
-            print(e)
+            print('some error in parse the question!!!'); print(e)
             continue
 
-        if standard_ent == '' or predicate_uri == '':
-            continue
+        if standard_ent == '' or predicate_uri == '': continue
 
         query = item['corrected_question']
-
         query_words = word_tokenize(query)
+
+        # get the entity in query for parse tree path
         ent_in_query = ''
         for word in query_words:
             if entity.lower() == word.lower():
                 ent_in_query = word
                 break
-        if not ent_in_query:
-            continue
+        if not ent_in_query: continue
 
         q_word = get_qword(query_words)
         try:
             syntax = ' '.join(get_syntactic_seq(query, ent_in_query, q_word))
         except Exception as e:
-            print('some error in syntax!!!')
-            print(e)
+            print('some error in syntax!!!'); print(e)
             continue
 
-        # hier = ' '.join(tmp[:min(length, 3)])  # 获取predicate的层次结构
-        hier = ' '.join(GetHierLabel(standard_ent, predicate_uri, item["sparql_template_id"]))
-        if not hier:
-            hier = predicate + ' ' + predicate
+        # replace hier feature with entity type
+        text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+        hier = ''
+        for text_ent, type_ in zip(text_ents, types):
+            if entity.lower() in text_ent.lower():
+                hier = type_ + ' ' + type_
+        if hier == '': continue
+        # if hier == '': hier = entity + ' ' + entity
 
-        f_predicate = query_words[-2]  # 伪的负样本
+        # hier = ' '.join(GetHierLabel(standard_ent, predicate_uri, item["sparql_template_id"]))
+        # if not hier:
+        #     hier = predicate + ' ' + predicate
+
+        # 生成错误的predicate
+        all_predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
+        f_predicate = ''
+        for t_predicate_uri in all_predicate_uris:
+            t_predicate = t_predicate_uri.split('/')[-1]
+            if t_predicate != predicate:
+                f_predicate = t_predicate # 伪的负样本
+        if f_predicate == '': continue
         
         res.append((query, syntax, hier, predicate, 1))
         res.append((query, syntax, hier, f_predicate, 0))
@@ -169,14 +172,16 @@ def GetSimpleQueryForTrain():
     t_res = res[:int(0.8*len(res))]
     d_res = res[int(0.8*len(res)):]
 
-    with open('../data/train_data.csv', 'w') as f:
+    with open(args.train_data, 'w') as f:
         writer = csv.writer(f, delimiter='\t')
         writer.writerows(t_res)
-    with open('../data/dev_data.csv', 'w') as f:
+    with open(args.dev_data, 'w') as f:
         writer = csv.writer(f, delimiter='\t')
         writer.writerows(d_res)
 
+    print('done!')
 
+# 生成测试的时候，xgboost所需的数据
 def GetSimpleQueryForTest():
     simple_queries = get_simple_query(paths.lcquad_test)
 
@@ -193,49 +198,45 @@ def GetSimpleQueryForTest():
         query = item['corrected_question']
         query_id = item['_id']
 
-        print('parsing the tree...')
         parse_tree = parse_sentence(query)
 
         query_words = word_tokenize(query)
         q_word = get_qword(query_words)
 
-        print('EntityLinking...')
-        text_ents, standard_ents, standard_ent_uries, confs = EntityLinking(query, 'more')
+        text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
 
         for i in range(len(standard_ents)):
             text_ent = text_ents[i]; standard_ent = standard_ents[i]
             conf = confs[i]; standard_ent_uri = standard_ent_uries[i]
 
             try:
-                print('get_syntactic_seq_from_tree...')
                 syntax = get_syntactic_seq_from_tree(parse_tree, text_ent.split()[0], q_word)  # List[Str]
                 if len(syntax) < 2: syntax.append(q_word)
             except Exception as e:
                 print('some errors in get_syntactic_seq'); print(e)
                 syntax = [text_ent.split()[0], q_word]
             
-            print('GetPredicateList...')
-            predicate_uris = GetPredicateList(standard_ent)
+            predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
 
             for predicate_uri in predicate_uris:
 
                 predicate = predicate_uri.split('/')[-1]
-                if '#' in predicate: continue
-                if 'subject' in predicate or 'wiki' in predicate or 'hypernym' in predicate: continue
 
-                print('GetHierLabel...')
-                hier = GetHierLabel(standard_ent, predicate_uri)  # List[Str]
-                if not hier: hier = [predicate] * 2
+                # hier = GetHierLabel(standard_ent, predicate_uri)  # List[Str]
+                # if not hier: hier = [predicate] * 2
+                hier = [types[i]] * 2
                 
                 res_item.append((syntax, hier, [predicate], conf, standard_ent_uri, predicate_uri))
 
         if res_item:
             total_res.append((query_id, query, res_item))
 
-    with open('../data/test_data.pkl', 'wb') as f:
+    with open(args.xgb_test, 'wb') as f:
         pickle.dump(total_res, f)
 
+    print('done!')
 
+# 生成标准答案的
 def get_stand_ans_for_test():
 
     simple_queries = get_simple_query(paths.lcquad_test)
@@ -246,9 +247,7 @@ def get_stand_ans_for_test():
 
     for item in simple_queries:
 
-        counter += 1
-        print(counter)
-
+        counter += 1; print(counter)
 
         try:
             if item["sparql_template_id"] == 2:
@@ -260,16 +259,11 @@ def get_stand_ans_for_test():
 
             res.append((item['corrected_question'], standard_ent, predicate))
             
-            # standard_ent = re.sub("[\s+\.\!,&$%^*)(+\"\']+|[+——！，。？、~@#￥%……&*（）]+",  "", standard_ent)
-            # tmp = standard_ent.split('_')
-            # standard_ent = [a for a in tmp if a != '']
-            # entity = standard_ent[-1]; standard_ent = '_'.join(standard_ent)
         except Exception as e:
             print('some error in parse the question!!!')
             print(e)
             continue
 
-        
     with open('../data/gold_test.csv', "w") as csvfile:
         writer = csv.writer(csvfile, delimiter='\t')
         writer.writerows(res)

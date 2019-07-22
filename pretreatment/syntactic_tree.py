@@ -4,7 +4,7 @@ import sys
 sys.path.append('..')
 from stanfordcorenlp import StanfordCoreNLP
 # import config_train as args
-nlp=StanfordCoreNLP('/home/wangdong/stanford-corenlp-full-2018-02-27', lang='en')
+nlp=StanfordCoreNLP('../stanford-corenlp-full-2018-02-27', lang='en')
 
 
 def parse_sentence(sen):

@@ -8,7 +8,7 @@ import config_train as args
 import pickle
 from mgnn import MGNN
 import numpy as np
-# from embeddings import GloveEmbedding
+from embeddings import GloveEmbedding
 # from sklearn.metrics import classification_report, precision_recall_fscore_support
 import spacy
 import time
@@ -41,26 +41,59 @@ args.rel_vocab_size = len(relF.vocab)
 
 args.pad_id = queryF.vocab.stoi['<pad>']
 
-args.query_emb = None
-args.syntax_emb = None
-args.hier_emb = None
-args.rel_emb = None
+
+g = GloveEmbedding('common_crawl_840', d_emb=300)
+def get_embedding(vocab, source):
+    print(source); is_in = 0
+    embedding = []
+    for i in range(len(vocab)):
+        if not g.emb(vocab.itos[i])[0]:
+            embedding.append(np.random.uniform(-0.01, 0.01, size=(1, 300))[0])
+        else:
+            is_in += 1
+            embedding.append(np.array(g.emb(vocab.itos[i])))
+    embedding = np.array(embedding, dtype=np.float32)
+    print(len(vocab), is_in)
+    return embedding
+
+args.query_emb = get_embedding(queryF.vocab, 'query')
+args.syntax_emb = get_embedding(syntaxF.vocab, 'syntax')
+# args.hier_emb = get_embedding(hierF.vocab, 'hier')
+args.hier_emb = np.eye(len(hierF.vocab)).astype(np.float32); args.hier_emb_size = len(hierF.vocab)
+args.rel_emb = get_embedding(relF.vocab, 'rel')
+
+def save_emb(emb, emb_path):
+    with open(emb_path, 'wb') as f:
+        pickle.dump(emb, f)
+
+save_emb(args.query_emb, args.query_emb_path)
+save_emb(args.syntax_emb, args.syntax_emb_path)
+save_emb(args.hier_emb, args.hier_emb_path)
+save_emb(args.rel_emb, args.rel_emb_path)
 
 args.update_query_emb = True
 args.update_syntax_emb = True
-args.update_hier_emb = True
+args.update_hier_emb = False
 args.update_rel_emb = True
-
 
 def save_vocab(vocab, vocab_path):
     with open(vocab_path, 'wb') as f:
         pickle.dump(vocab, f)
-
 save_vocab(queryF.vocab, args.query_vocab)
 save_vocab(syntaxF.vocab, args.syntax_vocab)
 save_vocab(hierF.vocab, args.hier_vocab)
 save_vocab(relF.vocab, args.rel_vocab)
 
+vocab_dict = {'query_vocab_size':len(queryF.vocab), 'syntax_vocab_size':len(syntaxF.vocab),
+             'hier_vocab_size':len(hierF.vocab), 'rel_vocab_size':len(relF.vocab),
+             'pad_id':queryF.vocab.stoi['<pad>']}
+with open(args.vocab_dict, 'wb') as f:
+    pickle.dump(vocab_dict, f)
+
+emb_dict = {'query_emb':args.query_emb, 'syntax_emb':args.syntax_emb,
+             'hier_emb':args.hier_emb, 'rel_emb':args.rel_emb}
+with open(args.emb_dict, 'wb') as f:
+    pickle.dump(emb_dict, f)
 
 args.use_cuda = torch.cuda.is_available()
 
@@ -176,6 +209,11 @@ for epoch in range(1, args.epochs+1):
 
     if loss < best_dev_loss:
         best_dev_loss = loss
-        torch.save(mgnn, args.model_path)
+        # torch.save(mgnn, args.model_path)
+        torch.save(mgnn.state_dict(), args.model_path)
+        with open('../data/query_emb.pkl', 'wb') as f:
+            pickle.dump(mgnn.query_emb.weight.data.cpu().numpy(), f)
+        with open('../data/rel_emb.pkl', 'wb') as f:
+            pickle.dump(mgnn.rel_emb.weight.data.cpu().numpy(), f)
 
 print('The best dev loss is: ', best_dev_loss)
