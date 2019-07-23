@@ -1,14 +1,15 @@
 # -*- coding:utf-8 -*-
 
 import sys
+
 sys.path.append('..')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchtext.data import Field, TabularDataset, BucketIterator, Iterator
-import config_train as args
+import mgnn.config_train as args
 import pickle
-from mgnn import MGNN
+from mgnn.mgnn import MGNN
 from pretreatment.DataExtract import EntityLinking, GetPredicateList, GetHierLabel, get_qword
 from pretreatment.QueryFilter import get_simple_query
 from pretreatment.syntactic_tree import get_syntactic_seq
@@ -30,7 +31,7 @@ def pad_data(data, vocab):
     for i in range(len(data)):
         while len(data[i]) < max_length:
             data[i].append(pad_id)
-    
+
     return data
 
 
@@ -49,7 +50,6 @@ def get_id_len(text, vocab):
 
 
 def get_input(candicates):
-
     query_vocab = get_vocab(args.query_vocab)
     syntax_vocab = get_vocab(args.syntax_vocab)
     hier_vocab = get_vocab(args.hier_vocab)
@@ -61,25 +61,34 @@ def get_input(candicates):
     rels, rels_length = [], []
 
     for query, syntax, hier, rel in candicates:
-    
-        query, query_length = get_id_len(query, query_vocab); queries.append(query); queries_length.append(query_length)
-        syntax, syntax_length = get_id_len(syntax, syntax_vocab); syntaxs.append(syntax); syntaxs_length.append(syntax_length)
-        hier, hier_length = get_id_len(hier, hier_vocab); hiers.append(hier); hiers_length.append(hier_length)
-        rel, rel_length = get_id_len(rel, rel_vocab); rels.append(rel); rels_length.append(rel_length)
+        query, query_length = get_id_len(query, query_vocab);
+        queries.append(query);
+        queries_length.append(query_length)
+        syntax, syntax_length = get_id_len(syntax, syntax_vocab);
+        syntaxs.append(syntax);
+        syntaxs_length.append(syntax_length)
+        hier, hier_length = get_id_len(hier, hier_vocab);
+        hiers.append(hier);
+        hiers_length.append(hier_length)
+        rel, rel_length = get_id_len(rel, rel_vocab);
+        rels.append(rel);
+        rels_length.append(rel_length)
 
     queries = pad_data(queries, query_vocab)
     syntaxs = pad_data(syntaxs, syntax_vocab)
     hiers = pad_data(hiers, hier_vocab)
-    rels = pad_data(rels, rel_vocab)    
+    rels = pad_data(rels, rel_vocab)
 
-    queries = torch.LongTensor(queries); queries_length = torch.LongTensor(queries_length)
-    syntaxs = torch.LongTensor(syntaxs); syntaxs_length = torch.LongTensor(syntaxs_length)
-    hiers = torch.LongTensor(hiers); hiers_length = torch.LongTensor(hiers_length)
-    rels = torch.LongTensor(rels); rels_length = torch.LongTensor(rels_length)
+    queries = torch.LongTensor(queries);
+    queries_length = torch.LongTensor(queries_length)
+    syntaxs = torch.LongTensor(syntaxs);
+    syntaxs_length = torch.LongTensor(syntaxs_length)
+    hiers = torch.LongTensor(hiers);
+    hiers_length = torch.LongTensor(hiers_length)
+    rels = torch.LongTensor(rels);
+    rels_length = torch.LongTensor(rels_length)
 
     return queries, queries_length, syntaxs, syntaxs_length, hiers, hiers_length, rels, rels_length
-
-
 
 
 if __name__ == '__main__':
@@ -87,7 +96,18 @@ if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
 
     print('load model ...')
-    mgnn = torch.load(args.model_path)
+    part_dict = pickle.load(open('../data/part_dict.pkl', 'rb'))
+    args.query_vocab_size = part_dict['query_vocab_size']
+    args.syntax_vocab_size = part_dict['syntax_vocab_size']
+    args.hier_vocab_size = part_dict['hier_vocab_size']
+    args.rel_vocab_size = part_dict['rel_vocab_size']
+    args.pad_id = part_dict['pad_id']
+    args.use_cuda = use_cuda
+
+    mgnn = MGNN(args)
+    mgnn.load_state_dict(torch.load(args.model_path))
+    mgnn.eval()
+    # mgnn = torch.load(args.model_path)
 
     if use_cuda:
         mgnn = mgnn.cuda()
@@ -98,12 +118,12 @@ if __name__ == '__main__':
     all_question_predicates = []
 
     for item in simple_queries:
-        
+
         entity_predicate = []
         model_input = []
 
         query = item['corrected_question']
-        text_ents, standard_ents= EntityLinking(query) 
+        text_ents, standard_ents = EntityLinking(query)
 
         query_words = word_tokenize(query)
         q_word = get_qword(query_words)
@@ -111,7 +131,7 @@ if __name__ == '__main__':
         # flag = False
 
         for text_ent, standard_ent in zip(text_ents, standard_ents):
-            
+
             # if 'Brown_House' in standard_ent:
             #     flag = True
 
@@ -145,7 +165,7 @@ if __name__ == '__main__':
                 model_input.append((query.split(), syntax, hier, [predicate]))
 
                 entity_predicate.append((standard_ent, predicate))
-        
+
         # print(model_input)
 
         # if flag:
@@ -157,18 +177,22 @@ if __name__ == '__main__':
         query, query_length, syntax, syntax_length, hier, hier_length, rel, rel_length = get_input(model_input)
 
         if use_cuda:
-            query = query.cuda(); query_length = query_length.cuda()
-            syntax = syntax.cuda(); syntax_length = syntax_length.cuda()
-            hier = hier.cuda(); hier_length = hier_length.cuda()
-            rel = rel.cuda(); rel_length = rel_length.cuda()
+            query = query.cuda();
+            query_length = query_length.cuda()
+            syntax = syntax.cuda();
+            syntax_length = syntax_length.cuda()
+            hier = hier.cuda();
+            hier_length = hier_length.cuda()
+            rel = rel.cuda();
+            rel_length = rel_length.cuda()
 
         pred_sim = mgnn(query, query_length, syntax, syntax_length, hier, hier_length, rel, rel_length)
 
         res = []
         for (entity, predicate), score in zip(entity_predicate, pred_sim):
-            print('entity: '+entity, 'predicate: '+predicate, 'sim: ', score.cpu().item())
+            print('entity: ' + entity, 'predicate: ' + predicate, 'sim: ', score.cpu().item())
             res.append((entity, predicate, score.cpu().item()))
-        
+
         res.sort(key=lambda x: x[2], reverse=True)
 
         all_question_predicates.append((item['corrected_question'], res[0][0], res[0][1], res[0][2]))
