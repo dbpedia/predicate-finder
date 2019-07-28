@@ -13,9 +13,43 @@ from nltk.tokenize import word_tokenize
 from pretreatment.DataExtract import EntityLinking, GetPredicateList
 from pretreatment.QueryFilter import *
 from torchnlp.word_to_vector import FastText, GloVe
-fasttext = FastText()
+# fasttext = FastText()
+from embeddings import GloveEmbedding
+g = GloveEmbedding('common_crawl_840', d_emb=300)
+import math
 
-def method1():
+def get_idf():
+    simple_queries = get_simple_query(paths.lcquad_test)
+    count = 0
+    idf = {}
+
+    num = 0
+    for item in simple_queries:
+        num += 1; print(num)
+
+        query = item['corrected_question']
+        text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+
+        for i in range(len(standard_ents)):
+            standard_ent = standard_ents[i]
+            predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
+            count += 1
+
+            for predicate_uri in predicate_uris:
+                predicate = predicate_uri.split('/')[-1]
+                if predicate not in idf:
+                    idf[predicate] = 1
+                else:
+                    idf[predicate] += 1
+
+    for k, v in idf.items():
+        idf[k] = math.log2(float(count)/v)
+    with open('../data/idf.pkl', 'wb') as f:
+        pickle.dump(idf, f)
+
+    return idf
+
+def method1(idf):
     simple_queries = get_simple_query(paths.lcquad_test)
 
     total_res = []
@@ -37,7 +71,11 @@ def method1():
 
             for word in query_words:
                 if word not in text_ent:
-                    sentence_emb.append(fasttext[word])
+                    if not g.emb(word)[0]:
+                        sentence_emb.append(np.random.uniform(-0.01, 0.01, size=(1, 300))[0])
+                    else:
+                        sentence_emb.append(np.array(g.emb(word)))
+                    # sentence_emb.append(fasttext[word])
             sentence_emb = np.array(sentence_emb)
             
             predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
@@ -46,15 +84,19 @@ def method1():
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
 
-                predicate_emb = np.array([fasttext[predicate]])
+                if not g.emb(predicate)[0]:
+                    predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
+                else:
+                    predicate_emb = np.array([g.emb(predicate)])
+                # predicate_emb = np.array([fasttext[predicate]])
 
                 mat = np.dot(sentence_emb, predicate_emb.transpose())
                 sentence_norm = np.sqrt(np.multiply(sentence_emb, sentence_emb).sum(axis=1))[:, np.newaxis]
                 predicate_norm = np.sqrt(np.multiply(predicate_emb, predicate_emb).sum(axis=1))[:, np.newaxis]
-                socres = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose()))
+                scores = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose()))
 
-                socres = socres.squeeze()
-                avg = np.mean(scores)
+                scores = scores.squeeze()
+                avg = np.max(scores)
                 if avg > max_score:
                     max_score = avg; ans_predicate = predicate
 
@@ -79,4 +121,6 @@ if __name__ == '__main__':
     # scores = np.divide(mat, np.dot(a, b.transpose()))
     # print(scores)
 
-    method1()
+    idf = get_idf()
+
+    method1(idf)
