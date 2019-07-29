@@ -10,7 +10,7 @@ import csv
 import pickle
 import numpy as np
 from nltk.tokenize import word_tokenize
-from pretreatment.DataExtract import EntityLinking, GetPredicateList
+from pretreatment.DataExtract import EntityLinking, GetPredicateList, Entity_Link_Falcon
 from pretreatment.QueryFilter import *
 from torchnlp.word_to_vector import FastText, GloVe
 # fasttext = FastText()
@@ -28,7 +28,8 @@ def get_idf():
         num += 1; print(num)
 
         query = item['corrected_question']
-        text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+        # text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+        standard_ents, text_ents = Entity_Link_Falcon(query)
 
         for i in range(len(standard_ents)):
             standard_ent = standard_ents[i]
@@ -46,8 +47,11 @@ def get_idf():
         idf[k] = math.log2(float(count)/v)
     with open('../data/idf.pkl', 'wb') as f:
         pickle.dump(idf, f)
+    
+    print('get idf done!')
 
     return idf
+
 
 def method1(idf):
     simple_queries = get_simple_query(paths.lcquad_test)
@@ -62,7 +66,8 @@ def method1(idf):
         query = item['corrected_question']; query_words = word_tokenize(query)
         query_id = item['_id']
 
-        text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+        # text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+        standard_ents, text_ents = Entity_Link_Falcon(query)
 
         final_entity = ''; final_predicate = ''; final_score = float('-inf')
         for i in range(len(standard_ents)):
@@ -83,6 +88,10 @@ def method1(idf):
             ans_predicate = ''; max_score = float('-inf')
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
+                if predicate in idf:
+                    idf_score = idf[predicate]
+                else:
+                    idf_score = 2.0
 
                 if not g.emb(predicate)[0]:
                     predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
@@ -96,7 +105,7 @@ def method1(idf):
                 scores = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose()))
 
                 scores = scores.squeeze()
-                avg = np.max(scores)
+                avg = np.max(scores) * idf_score
                 if avg > max_score:
                     max_score = avg; ans_predicate = predicate
 
@@ -109,17 +118,10 @@ def method1(idf):
         writer = csv.writer(csvfile, delimiter='\t')
         writer.writerows(total_res)
 
-    print('done!')
+    print('get test result done!')
 
 
 if __name__ == '__main__':
-    # a = np.array([[1.,2.], [2.,3.], [3.,4.]])
-    # b = np.array([[5.,6.]])
-    # mat = np.dot(a, b.transpose())
-    # a = np.sqrt(np.multiply(a, a).sum(axis=1))[:, np.newaxis]
-    # b = np.sqrt(np.multiply(b, b).sum(axis=1))[:, np.newaxis]
-    # scores = np.divide(mat, np.dot(a, b.transpose()))
-    # print(scores)
 
     idf = get_idf()
 

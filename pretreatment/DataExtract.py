@@ -2,6 +2,8 @@
 
 from SPARQLWrapper import SPARQLWrapper, JSON
 import spotlight as sl
+import requests
+import json
 
 
 def get_qword(query):
@@ -160,6 +162,41 @@ def EntityLinking(text, return_type='less'):
     elif return_type == 'more':
         return text_ent, standard_ent, standard_ent_uri, similarities, types
 
+def Entity_Link_Falcon(text):
+    headers = {'Content-Type': 'application/json'}
+    url = 'https://labs.tib.eu/falcon/api?mode=long'
+    data = {"text": text}
+
+    try:
+        response = requests.post(url, data=json.dumps(data), headers=headers).text
+        response = json.loads(response)
+        standard_entities = []; entities = []
+        for item in response['entities']:
+            standard_entity = item[0].split('/')[-1]
+            standard_entities.append(standard_entity)
+
+            entity = item[1]
+            entities.append(entity)
+            
+        return standard_entities, entities
+    except Exception as e:
+        print(e)
+        return [], []
+    
+    # response = requests.post(url, data=json.dumps(text), headers=headers).text
+    # print(response)
+    # response = json.loads(response)
+    # standard_entities = []; entities = []
+    # print(response['entities'])
+    # for item in response['entities']:
+    #     standard_entity = item[0].split('/')[-1]
+    #     standard_entities.append(standard_entity)
+
+    #     entity = item[1]
+    #     entities.append(entity)
+
+    # return standard_entities, entities
+
 def Question_Predicted_Answer_Sim_(query, sparql_query):
     try:
         sparql = SPARQLWrapper("https://dbpedia.org/sparql")
@@ -182,7 +219,7 @@ if __name__ == '__main__':
     # print(p_list)
 
 
-    res = GetPredicateList('Gibson_Les_Paul', template_id=101)
+    res = GetPredicateList('Ford_Motor_Company', template_id=152)
     print(res)
 
     # res = Question_Predicted_Answer_Sim_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
