@@ -13,10 +13,19 @@ from nltk.tokenize import word_tokenize
 from pretreatment.DataExtract import EntityLinking, GetPredicateList, Entity_Link_Falcon
 from pretreatment.QueryFilter import *
 from torchnlp.word_to_vector import FastText, GloVe
-# fasttext = FastText()
+fasttext = FastText()
 from embeddings import GloveEmbedding
 g = GloveEmbedding('common_crawl_840', d_emb=300)
 import math
+
+def get_ngram(text, n):
+    word_list = text
+    res = []
+    for i in range(len(word_list)):
+        if i+n > len(word_list):
+            break
+        res.append(word_list[i:i+n])
+    return res
 
 def get_idf():
     simple_queries = get_simple_query(paths.lcquad_test)
@@ -74,13 +83,19 @@ def method1(idf):
             text_ent = text_ents[i]; standard_ent = standard_ents[i]
             sentence_emb = []
 
+            tmp = []
             for word in query_words:
                 if word not in text_ent:
-                    if not g.emb(word)[0]:
-                        sentence_emb.append(np.random.uniform(-0.01, 0.01, size=(1, 300))[0])
-                    else:
-                        sentence_emb.append(np.array(g.emb(word)))
-                    # sentence_emb.append(fasttext[word])
+                    tmp.append(word)
+            
+            gram_2 = get_ngram(tmp, 2)
+            for gram in gram_2:
+                # if not g.emb(word)[0]:
+                #     sentence_emb.append(np.random.uniform(-0.01, 0.01, size=(1, 300))[0])
+                # else:
+                #     sentence_emb.append(np.array(g.emb(word)))
+                emb1 = fasttext[gram[0]].numpy(); emb2 = fasttext[gram[1]].numpy()
+                sentence_emb.append(emb1+emb2)
             sentence_emb = np.array(sentence_emb)
             
             predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
@@ -93,16 +108,16 @@ def method1(idf):
                 else:
                     idf_score = 2.0
 
-                if not g.emb(predicate)[0]:
-                    predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
-                else:
-                    predicate_emb = np.array([g.emb(predicate)])
-                # predicate_emb = np.array([fasttext[predicate]])
+                # if not g.emb(predicate)[0]:
+                #     predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
+                # else:
+                #     predicate_emb = np.array([g.emb(predicate)])
+                predicate_emb = np.array([fasttext[predicate].numpy()])
 
                 mat = np.dot(sentence_emb, predicate_emb.transpose())
                 sentence_norm = np.sqrt(np.multiply(sentence_emb, sentence_emb).sum(axis=1))[:, np.newaxis]
                 predicate_norm = np.sqrt(np.multiply(predicate_emb, predicate_emb).sum(axis=1))[:, np.newaxis]
-                scores = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose()))
+                scores = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose())+1e-9 )
 
                 scores = scores.squeeze()
                 avg = np.max(scores) * idf_score
@@ -114,7 +129,7 @@ def method1(idf):
 
         total_res.append((query, final_entity, final_predicate, final_score))
 
-    with open('../data/base_res.txt', 'w') as csvfile:
+    with open('../data/base_res.csv', 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter='\t')
         writer.writerows(total_res)
 
@@ -123,6 +138,8 @@ def method1(idf):
 
 if __name__ == '__main__':
 
-    idf = get_idf()
+    # idf = get_idf()
 
+    with open('../data/idf.pkl', 'rb') as f:
+        idf = pickle.load(f)
     method1(idf)
