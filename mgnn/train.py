@@ -8,7 +8,7 @@ import config_train as args
 import pickle
 from mgnn import MGNN
 import numpy as np
-# from embeddings import GloveEmbedding
+from embeddings import GloveEmbedding
 # from sklearn.metrics import classification_report, precision_recall_fscore_support
 import spacy
 import time
@@ -18,43 +18,84 @@ queryF = Field(sequential=True, batch_first=True, lower=True, include_lengths=Tr
 syntaxF = Field(sequential=True, batch_first=True, lower=True, include_lengths=True)
 hierF = Field(sequential=True, batch_first=True, lower=True, include_lengths=True)
 relF = Field(sequential=True, batch_first=True, lower=True, include_lengths=True)
-ansF = Field(sequential=True, batch_first=True, lower=True, include_lengths=True)
 labelF = Field(sequential=False, batch_first=True, use_vocab=False)
 
 
 print('load data...')
 train = TabularDataset(path=args.train_data, format='tsv', 
-                       fields=[('query', queryF), ('syntax', syntaxF), ('hier', hierF), ('rel', relF), ('ans', ansF),
+                       fields=[('query', queryF), ('syntax', syntaxF), ('hier', hierF), ('rel', relF),
                                ('label', labelF)])
 dev = TabularDataset(path=args.dev_data, format='tsv', 
-                       fields=[('query', queryF), ('syntax', syntaxF), ('hier', hierF), ('rel', relF), ('ans', ansF),
+                       fields=[('query', queryF), ('syntax', syntaxF), ('hier', hierF), ('rel', relF),
                                ('label', labelF)])
 
 queryF.build_vocab(train, min_freq=1)
 syntaxF.build_vocab(train, min_freq=1)
 hierF.build_vocab(train, min_freq=1)
 relF.build_vocab(train, min_freq=1)
-ansF.build_vocab(train, min_freq=1)
 
 args.query_vocab_size = len(queryF.vocab)
 args.syntax_vocab_size = len(syntaxF.vocab)
 args.hier_vocab_size = len(hierF.vocab)
 args.rel_vocab_size = len(relF.vocab)
-args.ans_vocab_size = len(ansF.vocab)
 
 args.pad_id = queryF.vocab.stoi['<pad>']
 
-args.query_emb = None
-args.syntax_emb = None
-args.hier_emb = None
-args.rel_emb = None
-args.ans_emb = None
+
+g = GloveEmbedding('common_crawl_840', d_emb=300)
+def get_embedding(vocab, source):
+    print(source); is_in = 0
+    embedding = []
+    for i in range(len(vocab)):
+        if not g.emb(vocab.itos[i])[0]:
+            embedding.append(np.random.uniform(-0.01, 0.01, size=(1, 300))[0])
+        else:
+            is_in += 1
+            embedding.append(np.array(g.emb(vocab.itos[i])))
+    embedding = np.array(embedding, dtype=np.float32)
+    print(len(vocab), is_in)
+    return embedding
+
+args.query_emb = get_embedding(queryF.vocab, 'query')
+args.syntax_emb = get_embedding(syntaxF.vocab, 'syntax')
+# args.hier_emb = get_embedding(hierF.vocab, 'hier')
+args.hier_emb = np.eye(len(hierF.vocab)).astype(np.float32); args.hier_emb_size = len(hierF.vocab)
+args.rel_emb = get_embedding(relF.vocab, 'rel')
+
+def save_emb(emb, emb_path):
+    with open(emb_path, 'wb') as f:
+        pickle.dump(emb, f)
+
+save_emb(args.query_emb, args.query_emb_path)
+save_emb(args.syntax_emb, args.syntax_emb_path)
+save_emb(args.hier_emb, args.hier_emb_path)
+save_emb(args.rel_emb, args.rel_emb_path)
 
 args.update_query_emb = True
 args.update_syntax_emb = True
-args.update_hier_emb = True
+args.update_hier_emb = False
 args.update_rel_emb = True
-args.update_ans_emb = True
+
+def save_vocab(vocab, vocab_path):
+    with open(vocab_path, 'wb') as f:
+        pickle.dump(vocab, f)
+save_vocab(queryF.vocab, args.query_vocab)
+save_vocab(syntaxF.vocab, args.syntax_vocab)
+save_vocab(hierF.vocab, args.hier_vocab)
+save_vocab(relF.vocab, args.rel_vocab)
+
+vocab_dict = {'query_vocab_size':len(queryF.vocab), 'syntax_vocab_size':len(syntaxF.vocab),
+             'hier_vocab_size':len(hierF.vocab), 'rel_vocab_size':len(relF.vocab),
+             'pad_id':queryF.vocab.stoi['<pad>']}
+with open(args.vocab_dict, 'wb') as f:
+    pickle.dump(vocab_dict, f)
+
+emb_dict = {'query_emb':args.query_emb, 'syntax_emb':args.syntax_emb,
+             'hier_emb':args.hier_emb, 'rel_emb':args.rel_emb}
+with open(args.emb_dict, 'wb') as f:
+    pickle.dump(emb_dict, f)
+
+args.use_cuda = torch.cuda.is_available()
 
 
 print('build batch iterator...')
@@ -75,7 +116,9 @@ dev_batch_iteraor = BucketIterator(
 mgnn = MGNN(args)
 optimizer = torch.optim.Adam(mgnn.parameters(), lr=args.lr)
 loss_func = nn.MSELoss()
-
+if args.use_cuda:
+    mgnn.cuda()
+    loss_func.cuda()
 
 def get_log(the_F, the_seq, the_len, log):
     for j in range(the_len):
@@ -101,11 +144,17 @@ def run(batch_generator, mode, best_dev_loss):
         syntax, syntax_length = getattr(batch, 'syntax')
         hier, hier_length = getattr(batch, 'hier')
         rel, rel_length = getattr(batch, 'rel')
-        ans, ans_length = getattr(batch, 'ans')
         label = getattr(batch, 'label').type(torch.FloatTensor).unsqueeze(1)
 
-        pred_sim = mgnn(query, query_length, syntax, syntax_length, hier, hier_length,
-                         rel, rel_length, ans, ans_length)
+        if args.use_cuda:
+            query = query.cuda(); query_length = query_length.cuda()
+            syntax = syntax.cuda(); syntax_length = syntax_length.cuda()
+            hier = hier.cuda(); hier_length = hier_length.cuda()
+            rel = rel.cuda(); rel_length = rel_length.cuda()
+            label = label.cuda()
+
+        pred_sim = mgnn(query, query_length, syntax, syntax_length, hier, hier_length, rel, rel_length)
+
         loss = loss_func(pred_sim, label)
         if mode == 'train':
             optimizer.zero_grad()
@@ -118,7 +167,6 @@ def run(batch_generator, mode, best_dev_loss):
             log = get_log(queryF, query[i], query_length[i], log)
             log = get_log(hierF, hier[i], hier_length[i], log)
             log = get_log(relF, rel[i], rel_length[i], log) 
-            log = get_log(ansF, ans[i], ans_length[i], log)
             log += str(label[i].item())+' ; ' + str(pred_sim[i].item()) + '\n'
             logs.append(log)
     
@@ -151,7 +199,7 @@ best_dev_loss = float('inf')
 
 for epoch in range(1, args.epochs+1):
 
-    print('The ', str(epoch), '-th iter: ')
+    print('The', str(epoch), 'iter: ')
 
     batch_generator = train_batch_iterator.__iter__()
     loss = run(batch_generator, 'train', best_dev_loss)
@@ -161,5 +209,11 @@ for epoch in range(1, args.epochs+1):
 
     if loss < best_dev_loss:
         best_dev_loss = loss
+        # torch.save(mgnn, args.model_path)
+        torch.save(mgnn.state_dict(), args.model_path)
+        with open('../data/query_emb.pkl', 'wb') as f:
+            pickle.dump(mgnn.query_emb.weight.data.cpu().numpy(), f)
+        with open('../data/rel_emb.pkl', 'wb') as f:
+            pickle.dump(mgnn.rel_emb.weight.data.cpu().numpy(), f)
 
 print('The best dev loss is: ', best_dev_loss)
