@@ -27,6 +27,35 @@ def get_ngram(text, n):
         res.append(word_list[i:i+n])
     return res
 
+
+def get_ngram_embedding(text, n):
+    embeddings = []
+    for i in range(len(text)):
+        for j in range(1, n+1):
+            words = text[i:i+j]
+            if len(words) > 0:
+                embedding = []
+                for word in words:
+                    embedding.append(fasttext[word].numpy())
+                embeddings.append(sum(np.array(embedding))/len(words))
+    return embeddings
+
+
+def split_predicate(predicate):
+    res = []; word = []
+
+    for ch in predicate:
+        if ch.isupper():
+            res.append(''.join(word))
+            word = [ch.lower()]
+        else:
+            word.append(ch)
+    if word:
+        res.append(''.join(word))
+
+    return res
+
+
 def get_idf():
     simple_queries = get_simple_query(paths.lcquad_test)
     count = 0
@@ -47,10 +76,12 @@ def get_idf():
 
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
-                if predicate not in idf:
-                    idf[predicate] = 1
-                else:
-                    idf[predicate] += 1
+                predicate_words = split_predicate(predicate)
+                for predicate_word in predicate_words:
+                    if predicate_word not in idf:
+                        idf[predicate_word] = 1
+                    else:
+                        idf[predicate_word] += 1
 
     for k, v in idf.items():
         idf[k] = math.log2(float(count)/v)
@@ -71,6 +102,7 @@ def method1(idf):
     for item in simple_queries:
 
         count += 1; print(count)
+        # if count < 204: continue
 
         query = item['corrected_question']; query_words = word_tokenize(query)
         query_id = item['_id']
@@ -83,36 +115,36 @@ def method1(idf):
             text_ent = text_ents[i]; standard_ent = standard_ents[i]
             sentence_emb = []
 
+            # remove the entitty
             tmp = []
             for word in query_words:
                 if word not in text_ent:
                     tmp.append(word)
             
-            gram_2 = get_ngram(tmp, 2)
-            for gram in gram_2:
-                # if not g.emb(word)[0]:
-                #     sentence_emb.append(np.random.uniform(-0.01, 0.01, size=(1, 300))[0])
-                # else:
-                #     sentence_emb.append(np.array(g.emb(word)))
-                emb1 = fasttext[gram[0]].numpy(); emb2 = fasttext[gram[1]].numpy()
-                sentence_emb.append(emb1+emb2)
-            sentence_emb = np.array(sentence_emb)
+            sentence_emb = get_ngram_embedding(tmp, 2)  # get 1, 2 gram at the same time
             
             predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
 
             ans_predicate = ''; max_score = float('-inf')
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
-                if predicate in idf:
-                    idf_score = idf[predicate]
-                else:
+                predicate_words = split_predicate(predicate)
+
+                idf_score = float('-inf'); in_idf = False
+                for predicate_word in predicate_words:
+                    if predicate in idf:
+                        idf_score = max(idf[predicate_word], idf_score); in_idf = True
+                if not in_idf:
                     idf_score = 2.0
 
                 # if not g.emb(predicate)[0]:
                 #     predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
                 # else:
                 #     predicate_emb = np.array([g.emb(predicate)])
-                predicate_emb = np.array([fasttext[predicate].numpy()])
+                predicate_emb = []
+                for predicate_word in predicate_words:
+                    predicate_emb.append(fasttext[predicate].numpy())
+                predicate_emb = np.array([sum(np.array(predicate_emb))/len(predicate_words)])
 
                 mat = np.dot(sentence_emb, predicate_emb.transpose())
                 sentence_norm = np.sqrt(np.multiply(sentence_emb, sentence_emb).sum(axis=1))[:, np.newaxis]
@@ -130,7 +162,7 @@ def method1(idf):
         total_res.append((query, final_entity, final_predicate, final_score))
 
     with open('../data/base_res.csv', 'w') as csvfile:
-        writer = csv.writer(csvfile, delimiter='\t')
+        writer = csv.writer(csvfile, delimiter=',')
         writer.writerows(total_res)
 
     print('get test result done!')
