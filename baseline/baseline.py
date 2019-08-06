@@ -18,6 +18,15 @@ from embeddings import GloveEmbedding
 g = GloveEmbedding('common_crawl_840', d_emb=300)
 import math
 
+def get_case():
+    with open('../data/base_res.csv', 'r') as csvfile:
+        csv_reader = csv.reader(csvfile, delimiter=',')
+        inf_case = []
+        for row in csv_reader:
+            if row[-1] == '-inf':
+                inf_case.append(row[0])
+        return inf_case
+
 def get_ngram(text, n):
     word_list = text
     res = []
@@ -66,7 +75,6 @@ def get_idf():
         num += 1; print(num)
 
         query = item['corrected_question']
-        # text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
         standard_ents, text_ents = Entity_Link_Falcon(query)
 
         for i in range(len(standard_ents)):
@@ -76,13 +84,11 @@ def get_idf():
 
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
-                predicate_words = split_predicate(predicate)
-                for predicate_word in predicate_words:
-                    if predicate_word not in idf:
-                        idf[predicate_word] = 1
-                    else:
-                        idf[predicate_word] += 1
-
+                if predicate not in idf:
+                    idf[predicate] = 1
+                else:
+                    idf[predicate] += 1
+            
     for k, v in idf.items():
         idf[k] = math.log2(float(count)/v)
     with open('../data/idf.pkl', 'wb') as f:
@@ -95,55 +101,53 @@ def get_idf():
 
 def method1(idf):
     simple_queries = get_simple_query(paths.lcquad_test)
+    
+    # simple_queries = get_simple_query(paths.lcquad_case)
 
     total_res = []
     count = 0
 
     for item in simple_queries:
 
-        count += 1; print(count)
-        # if count < 204: continue
+        count += 1;  print(count)
 
-        query = item['corrected_question']; query_words = word_tokenize(query)
-        query_id = item['_id']
+        query = item['corrected_question']
+        # if query != "Name the nearest city to David W. Brown House ?": 
+        #     continue
 
-        # text_ents, standard_ents, standard_ent_uries, confs, types = EntityLinking(query, 'more')
+        query_words = word_tokenize(query)
         standard_ents, text_ents = Entity_Link_Falcon(query)
+
+        # remove all the entities
+        rest_sen = []; all_text_ent = ' '.join(text_ents)
+        for word in query_words:
+            if word not in all_text_ent:
+                rest_sen.append(word)
+        sentence_emb = get_ngram_embedding(rest_sen, 2)  # get 1, 2 gram
 
         final_entity = ''; final_predicate = ''; final_score = float('-inf')
         for i in range(len(standard_ents)):
-            text_ent = text_ents[i]; standard_ent = standard_ents[i]
-            sentence_emb = []
 
-            # remove the entitty
-            tmp = []
-            for word in query_words:
-                if word not in text_ent:
-                    tmp.append(word)
-            
-            sentence_emb = get_ngram_embedding(tmp, 2)  # get 1, 2 gram at the same time
+            standard_ent = standard_ents[i]
             
             predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
 
-            ans_predicate = ''; max_score = float('-inf')
+            tmp_predicate = ''; tmp_score = float('-inf')
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
-                predicate_words = split_predicate(predicate)
-
-                idf_score = float('-inf'); in_idf = False
-                for predicate_word in predicate_words:
-                    if predicate in idf:
-                        idf_score = max(idf[predicate_word], idf_score); in_idf = True
-                if not in_idf:
+                if predicate in idf:
+                    idf_score = idf[predicate]
+                else:
                     idf_score = 2.0
 
+                predicate_words = split_predicate(predicate)
                 # if not g.emb(predicate)[0]:
                 #     predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
                 # else:
                 #     predicate_emb = np.array([g.emb(predicate)])
                 predicate_emb = []
-                for predicate_word in predicate_words:
-                    predicate_emb.append(fasttext[predicate].numpy())
+                for pw in predicate_words:
+                    predicate_emb.append(fasttext[pw].numpy())
                 predicate_emb = np.array([sum(np.array(predicate_emb))/len(predicate_words)])
 
                 mat = np.dot(sentence_emb, predicate_emb.transpose())
@@ -152,12 +156,14 @@ def method1(idf):
                 scores = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose())+1e-9 )
 
                 scores = scores.squeeze()
+                # print(scores)
                 avg = np.max(scores) * idf_score
-                if avg > max_score:
-                    max_score = avg; ans_predicate = predicate
+                # print(idf_score)
+                if avg > tmp_score:
+                    tmp_score = avg; tmp_predicate = predicate
 
-            if max_score > final_score:
-                final_entity = standard_ent; final_predicate = ans_predicate; final_score = max_score
+            if tmp_score > final_score:
+                final_entity = standard_ent; final_predicate = tmp_predicate; final_score = tmp_score
 
         total_res.append((query, final_entity, final_predicate, final_score))
 

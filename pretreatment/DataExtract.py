@@ -21,6 +21,12 @@ def get_qword(query):
 
 def GetPredicateList(entity, query_template='', template_id=0):
 
+    # process some special symbol in entity, such as [(),']
+    special_symbol = ["(", ")", ",", "'", "+", "."]
+    for symbol in special_symbol:
+        entity = entity.replace(symbol, "\\"+symbol)
+
+
     # the LIMIT will influence the results of query
     query_template = """
         PREFIX dbr:  <http://dbpedia.org/resource/>
@@ -41,7 +47,6 @@ def GetPredicateList(entity, query_template='', template_id=0):
         """ %entity
 
 
-    # !!![Errno 54]Connection reset by peer
     try:
         sparql = SPARQLWrapper("https://dbpedia.org/sparql")
         sparql.setQuery(query_template)
@@ -162,6 +167,7 @@ def EntityLinking(text, return_type='less'):
     elif return_type == 'more':
         return text_ent, standard_ent, standard_ent_uri, similarities, types
 
+
 def Entity_Link_Falcon(text):
     headers = {'Content-Type': 'application/json'}
     url = 'https://labs.tib.eu/falcon/api?mode=long'
@@ -177,25 +183,12 @@ def Entity_Link_Falcon(text):
 
             entity = item[1]
             entities.append(entity)
-            
+
         return standard_entities, entities
     except Exception as e:
         print(e)
         return [], []
     
-    # response = requests.post(url, data=json.dumps(text), headers=headers).text
-    # print(response)
-    # response = json.loads(response)
-    # standard_entities = []; entities = []
-    # print(response['entities'])
-    # for item in response['entities']:
-    #     standard_entity = item[0].split('/')[-1]
-    #     standard_entities.append(standard_entity)
-
-    #     entity = item[1]
-    #     entities.append(entity)
-
-    # return standard_entities, entities
 
 def Question_Predicted_Answer_Sim_(query, sparql_query):
     try:
