@@ -212,8 +212,9 @@ if __name__ == '__main__':
     # print(p_list)
 
 
-    res = GetPredicateList('Ford_Motor_Company', template_id=152)
+    res = GetPredicateList('Channel_District', template_id=152)
     print(res)
 
     # res = Question_Predicted_Answer_Sim_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
+    # print(res)im_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
     # print(res)

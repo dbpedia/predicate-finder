@@ -64,6 +64,15 @@ def split_predicate(predicate):
 
     return res
 
+def merge_predicate(predicate):
+    tmp = predicate.split()
+    if len(tmp) == 1:
+        return tmp[0]
+    for i in range(1, len(tmp)):
+        tmp[i] = tmp[i].capitalize()
+    return ''.join(tmp)
+
+
 
 def get_idf():
     simple_queries = get_simple_query(paths.lcquad_test)
@@ -84,6 +93,7 @@ def get_idf():
 
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
+                # predicate = predicate_uri
                 if predicate not in idf:
                     idf[predicate] = 1
                 else:
@@ -91,7 +101,7 @@ def get_idf():
             
     for k, v in idf.items():
         idf[k] = math.log2(float(count)/v)
-    with open('../data/idf.pkl', 'wb') as f:
+    with open('../data/old_idf.pkl', 'wb') as f:
         pickle.dump(idf, f)
     
     print('get idf done!')
@@ -112,7 +122,7 @@ def method1(idf):
         count += 1;  print(count)
 
         query = item['corrected_question']
-        # if query != "Name the nearest city to David W. Brown House ?": 
+        # if query != "what kind of things play on WBIG FM?": 
         #     continue
 
         query_words = word_tokenize(query)
@@ -135,16 +145,15 @@ def method1(idf):
             tmp_predicate = ''; tmp_score = float('-inf')
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
+                # predicate = predicate_uri
                 if predicate in idf:
                     idf_score = idf[predicate]
                 else:
                     idf_score = 2.0
 
                 predicate_words = split_predicate(predicate)
-                # if not g.emb(predicate)[0]:
-                #     predicate_emb = np.array([np.random.uniform(-0.01, 0.01, size=(1, 300))[0]])
-                # else:
-                #     predicate_emb = np.array([g.emb(predicate)])
+                # predicate_words = predicate.split()
+                
                 predicate_emb = []
                 for pw in predicate_words:
                     predicate_emb.append(fasttext[pw].numpy())
@@ -163,11 +172,14 @@ def method1(idf):
                     tmp_score = avg; tmp_predicate = predicate
 
             if tmp_score > final_score:
-                final_entity = standard_ent; final_predicate = tmp_predicate; final_score = tmp_score
+                final_entity = standard_ent
+                final_predicate = tmp_predicate
+                # final_predicate = merge_predicate(tmp_predicate)
+                final_score = tmp_score
 
         total_res.append((query, final_entity, final_predicate, final_score))
 
-    with open('../data/base_res.csv', 'w') as csvfile:
+    with open('../data/old_base_res.csv', 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter=',')
         writer.writerows(total_res)
 
@@ -176,8 +188,8 @@ def method1(idf):
 
 if __name__ == '__main__':
 
-    # idf = get_idf()
+    idf = get_idf()
 
-    with open('../data/idf.pkl', 'rb') as f:
+    with open('../data/old_idf.pkl', 'rb') as f:
         idf = pickle.load(f)
     method1(idf)
