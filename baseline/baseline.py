@@ -88,12 +88,12 @@ def get_idf():
 
         for i in range(len(standard_ents)):
             standard_ent = standard_ents[i]
+
             predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
             count += 1
 
             for predicate_uri in predicate_uris:
                 predicate = predicate_uri.split('/')[-1]
-                # predicate = predicate_uri
                 if predicate not in idf:
                     idf[predicate] = 1
                 else:
@@ -101,7 +101,7 @@ def get_idf():
             
     for k, v in idf.items():
         idf[k] = math.log2(float(count)/v)
-    with open('../data/old_idf.pkl', 'wb') as f:
+    with open('../data/idf.pkl', 'wb') as f:
         pickle.dump(idf, f)
     
     print('get idf done!')
@@ -122,7 +122,7 @@ def method1(idf):
         count += 1;  print(count)
 
         query = item['corrected_question']
-        # if query != "what kind of things play on WBIG FM?": 
+        # if query != "Josef Bhler belongs to which political party?": 
         #     continue
 
         query_words = word_tokenize(query)
@@ -139,20 +139,25 @@ def method1(idf):
         for i in range(len(standard_ents)):
 
             standard_ent = standard_ents[i]
+            # print(standard_ent)
             
-            predicate_uris = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
+            predicate_uris, predicate_texts = GetPredicateList(standard_ent, template_id=item['sparql_template_id'])
 
             tmp_predicate = ''; tmp_score = float('-inf')
-            for predicate_uri in predicate_uris:
+            for i in range(len(predicate_uris)):
+            # for predicate_uri in predicate_uris:
+                predicate_uri = predicate_uris[i]; predicate_text = predicate_texts[i]
                 predicate = predicate_uri.split('/')[-1]
-                # predicate = predicate_uri
                 if predicate in idf:
                     idf_score = idf[predicate]
                 else:
                     idf_score = 2.0
 
-                predicate_words = split_predicate(predicate)
-                # predicate_words = predicate.split()
+                # idf_score = math.log(idf_score+1, 2)
+                # idf_score = 1 / (1 + np.exp(-idf_score))
+
+                # predicate_words = split_predicate(predicate)
+                predicate_words = predicate_text.split()
                 
                 predicate_emb = []
                 for pw in predicate_words:
@@ -164,6 +169,7 @@ def method1(idf):
                 predicate_norm = np.sqrt(np.multiply(predicate_emb, predicate_emb).sum(axis=1))[:, np.newaxis]
                 scores = np.divide(mat, np.dot(sentence_norm, predicate_norm.transpose())+1e-9 )
 
+                # print(predicate)
                 scores = scores.squeeze()
                 # print(scores)
                 avg = np.max(scores) * idf_score
@@ -174,12 +180,11 @@ def method1(idf):
             if tmp_score > final_score:
                 final_entity = standard_ent
                 final_predicate = tmp_predicate
-                # final_predicate = merge_predicate(tmp_predicate)
                 final_score = tmp_score
 
         total_res.append((query, final_entity, final_predicate, final_score))
 
-    with open('../data/old_base_res.csv', 'w') as csvfile:
+    with open('../data/base_res.csv', 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter=',')
         writer.writerows(total_res)
 
@@ -188,8 +193,8 @@ def method1(idf):
 
 if __name__ == '__main__':
 
-    idf = get_idf()
+    # idf = get_idf()
 
-    with open('../data/old_idf.pkl', 'rb') as f:
+    with open('../data/idf.pkl', 'rb') as f:
         idf = pickle.load(f)
     method1(idf)

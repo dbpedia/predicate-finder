@@ -31,8 +31,10 @@ def GetPredicateList(entity, query_template='', template_id=0):
     query_template = """
         PREFIX dbr:  <http://dbpedia.org/resource/>
 
-        SELECT DISTINCT ?uri WHERE {
-            dbr:%s ?uri ?o.
+        SELECT DISTINCT ?p ?uri WHERE {
+            dbr:%s ?p ?o.
+            ?p rdfs:label ?uri.
+            FILTER(lang(?uri)='en')
         }
     """ %entity
     if template_id == 151 or template_id == 152 or template_id == 2:
@@ -41,10 +43,12 @@ def GetPredicateList(entity, query_template='', template_id=0):
         query_template = """
         PREFIX dbr:  <http://dbpedia.org/resource/>
 
-        SELECT DISTINCT ?uri WHERE {
-            ?s ?uri dbr:%s.
+        SELECT DISTINCT ?p ?uri WHERE {
+            ?s ?p dbr:%s.
+            ?p rdfs:label ?uri.
+            FILTER(lang(?uri)='en')
         }
-        """ %entity
+    """ %entity
 
 
     try:
@@ -57,15 +61,20 @@ def GetPredicateList(entity, query_template='', template_id=0):
         print(e)
         return []
 
-    p_list = [sub_result['uri']['value'] for sub_result in result["results"]["bindings"]]  # List[URI]
+    print(result)
+    
+    # p_list = [sub_result['uri']['value'] for sub_result in result["results"]["bindings"]]  # List[URI]
+    p_list = [sub_result['p']['value'] for sub_result in result["results"]["bindings"]]  # List[URI]
+    w_list = [sub_result['uri']['value'] for sub_result in result["results"]["bindings"]]
 
     # 过滤掉一些明显无用的predicate
-    res = []
-    for item in p_list:
+    p_res = []; w_res = []
+    for item, w in zip(p_list, w_list):
         if '#' in item or 'subject' in item or 'wiki' in item or 'hypernym' in item or 'gender' in item: continue
-        res.append(item)
+        p_res.append(item)
+        w_res.append(w)
 
-    return res
+    return p_res, w_res
 
 
 def GetHierLabel(entity, predicate_uri, template_id=2):
@@ -212,9 +221,8 @@ if __name__ == '__main__':
     # print(p_list)
 
 
-    res = GetPredicateList('Channel_District', template_id=152)
-    print(res)
+    res = GetPredicateList('Dzogchen_Ponlop_Rinpoche', template_id=2)
+    # print(res)
 
     # res = Question_Predicted_Answer_Sim_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
-    # print(res)im_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
     # print(res)
