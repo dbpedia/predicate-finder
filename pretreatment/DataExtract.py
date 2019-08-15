@@ -13,11 +13,45 @@ def get_qword(query):
     for item in query:
         if item.lower() in q_words:
             q_word = item
-    # assert q_word != ''
     if q_word == '':
         q_word = query[0]
     return q_word
 
+
+def GetNextEntity(standard_ent, predicate_uri, template_id):
+
+    if template_id in [111,5,105,3,11,103,305,403,405,311,303]:
+        query_template = """
+        PREFIX dbr:  <http://dbpedia.org/resource/>
+
+        SELECT DISTINCT ?uri WHERE {{
+            dbr:{entity} <{predicate}> ?uri.
+        }}
+    """.format(entity=standard_ent, predicate=predicate_uri)
+    elif template_id in [6,106,406,306]:
+        query_template = """
+        PREFIX dbr:  <http://dbpedia.org/resource/>
+
+        SELECT DISTINCT ?uri WHERE {{
+            ?uri <{predicate}> dbr:{entity}.
+        }}
+    """.format(entity=standard_ent, predicate=predicate_uri)
+
+    try:
+        sparql = SPARQLWrapper("https://dbpedia.org/sparql")
+        sparql.setQuery(query_template)
+        sparql.setReturnFormat(JSON)
+        result = sparql.query().convert()
+    except Exception:
+        print(query_template)
+        return []
+
+    entities = [sub_result['uri']['value'].split('/')[-1] for sub_result in result["results"]["bindings"]]
+
+    if not entities:
+        return None
+    else:
+        return entities[0]
 
 def GetPredicateList(entity, query_template='', template_id=0):
 
@@ -28,7 +62,9 @@ def GetPredicateList(entity, query_template='', template_id=0):
 
 
     # the LIMIT will influence the results of query
-    query_template = """
+    
+    if template_id in [151,152,2,102,15,16,3,11,103,402,303,315]:
+        query_template = """
         PREFIX dbr:  <http://dbpedia.org/resource/>
 
         SELECT DISTINCT ?p ?uri WHERE {
@@ -36,10 +72,8 @@ def GetPredicateList(entity, query_template='', template_id=0):
             ?p rdfs:label ?uri.
             FILTER(lang(?uri)='en')
         }
-    """ %entity
-    if template_id == 151 or template_id == 152 or template_id == 2:
-        pass  # 
-    elif template_id == 1 or template_id == 101:
+        """ %entity
+    elif template_id in [1,101,111,5,105,6,106,7,108,8,301,401,601,305,403,405,311,307,308,406,306]:
         query_template = """
         PREFIX dbr:  <http://dbpedia.org/resource/>
 
@@ -48,7 +82,7 @@ def GetPredicateList(entity, query_template='', template_id=0):
             ?p rdfs:label ?uri.
             FILTER(lang(?uri)='en')
         }
-    """ %entity
+        """ %entity
 
 
     try:
@@ -60,14 +94,10 @@ def GetPredicateList(entity, query_template='', template_id=0):
         print('some errors in GetPredicateList')
         print(e)
         return []
-
-    print(result)
     
-    # p_list = [sub_result['uri']['value'] for sub_result in result["results"]["bindings"]]  # List[URI]
     p_list = [sub_result['p']['value'] for sub_result in result["results"]["bindings"]]  # List[URI]
     w_list = [sub_result['uri']['value'] for sub_result in result["results"]["bindings"]]
 
-    # 过滤掉一些明显无用的predicate
     p_res = []; w_res = []
     for item, w in zip(p_list, w_list):
         if '#' in item or 'subject' in item or 'wiki' in item or 'hypernym' in item or 'gender' in item: continue
@@ -137,7 +167,6 @@ def GetHierLabel(entity, predicate_uri, template_id=2):
         return []
 
 
-# 取出最有可能的entity
 def EntityLinking(text, return_type='less'):
     try:
         annotation = sl.annotate('http://model.dbpedia-spotlight.org/en/annotate', \
@@ -221,8 +250,11 @@ if __name__ == '__main__':
     # print(p_list)
 
 
-    res = GetPredicateList('Dzogchen_Ponlop_Rinpoche', template_id=2)
+    # res = GetPredicateList('Dzogchen_Ponlop_Rinpoche', template_id=2)
     # print(res)
 
     # res = Question_Predicted_Answer_Sim_('', 'SELECT DISTINCT ?uri WHERE { <http://dbpedia.org/resource/Thorington_railway_station> <http://dbpedia.org/ontology/district> ?uri } ')
     # print(res)
+
+    res = GetNextEntity('Barack_Obama', 'http://dbpedia.org/ontology/party', 111)
+    print(res)
