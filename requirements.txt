@@ -1,5 +1,5 @@
 embeddings==0.0.6
-nltk==3.2.4
+nltk==3.4.5
 numpy==1.15.4
 pyspotlight==0.7.2
 python-Levenshtein==0.12.0
